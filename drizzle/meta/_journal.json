@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1768660541995,
+      "tag": "0000_clumsy_king_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1768711866823,
+      "tag": "0001_add_llm_configs",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1768712613714,
+      "tag": "0002_add_llm_prompts",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1768713351656,
+      "tag": "0003_add_llm_prompt_request_params",
+      "breakpoints": true
+    }
+  ]
+}
