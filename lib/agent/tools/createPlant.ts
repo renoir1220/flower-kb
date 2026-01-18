@@ -93,11 +93,11 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
         }),
         execute: async ({ name }) => {
             // 检查是否已存在
-            const existing = await db
+            const [existing] = await db
                 .select()
                 .from(plants)
                 .where(eq(plants.name, name))
-                .get();
+                .limit(1);
 
             if (existing) {
                 return {
@@ -139,11 +139,11 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
             const familyName = plantData.familyName;
             const genusName = plantData.genusName;
 
-            const targetFamily = await db
+            const [targetFamily] = await db
                 .select()
                 .from(families)
                 .where(eq(families.name, familyName))
-                .get();
+                .limit(1);
 
             // 如果科不存在，返回提示
             if (!targetFamily) {
@@ -162,11 +162,11 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
             }
 
             // 检查属是否存在
-            const targetGenus = await db
+            const [targetGenus] = await db
                 .select()
                 .from(genera)
                 .where(eq(genera.name, genusName))
-                .get();
+                .limit(1);
 
             // 如果属不存在，返回提示
             if (!targetGenus) {
@@ -186,7 +186,7 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
             }
 
             // 创建植物
-            const newPlant = await db
+            const [newPlant] = await db
                 .insert(plants)
                 .values({
                     name,
@@ -197,8 +197,7 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                     difficulty: plantData.difficulty || "medium",
                     genusId: targetGenus.id,
                 })
-                .returning()
-                .get();
+                .returning();
 
             // 保存养护指南
             if (careGuideData) {
@@ -227,21 +226,20 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                 for (const tagData of plantData.tags) {
                     try {
                         // 查找或创建标签
-                        let tag = await db
+                        let [tag] = await db
                             .select()
                             .from(tags)
                             .where(eq(tags.name, tagData.name))
-                            .get();
+                            .limit(1);
 
                         if (!tag) {
-                            tag = await db
+                            [tag] = await db
                                 .insert(tags)
                                 .values({
                                     name: tagData.name,
                                     category: tagData.category || "type",
                                 })
-                                .returning()
-                                .get();
+                                .returning();
                         }
 
                         // 创建关联

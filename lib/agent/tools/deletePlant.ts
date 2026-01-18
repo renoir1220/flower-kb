@@ -15,11 +15,11 @@ export const deletePlant = tool({
     }),
     execute: async ({ plantId, confirmName }) => {
         // 1. 检查植物是否存在
-        const existingPlant = await db
+        const [existingPlant] = await db
             .select()
             .from(plants)
             .where(eq(plants.id, plantId))
-            .get();
+            .limit(1);
 
         if (!existingPlant) {
             return { success: false, message: `ID为 ${plantId} 的植物不存在` };

@@ -36,11 +36,11 @@ export const updatePlant = tool({
     }),
     execute: async ({ plantId, basicInfo, careGuide }) => {
         // 1. 检查植物是否存在
-        const existingPlant = await db
+        const [existingPlant] = await db
             .select()
             .from(plants)
             .where(eq(plants.id, plantId))
-            .get();
+            .limit(1);
 
         if (!existingPlant) {
             return { success: false, message: `ID为 ${plantId} 的植物不存在` };
@@ -52,15 +52,15 @@ export const updatePlant = tool({
         // 2. 更新基本信息
         if (basicInfo && Object.keys(basicInfo).length > 0) {
             try {
-                updatedPlant = await db
+                const [res] = await db
                     .update(plants)
                     .set({
                         ...basicInfo,
-                        updatedAt: new Date().toISOString(), // 手动更新时间
+                        updatedAt: new Date(), // Use Date object
                     })
                     .where(eq(plants.id, plantId))
-                    .returning()
-                    .get();
+                    .returning();
+                updatedPlant = res;
             } catch (error) {
                 console.error("Update plant error:", error);
                 return { success: false, message: "更新植物基本信息失败" };
@@ -70,29 +70,29 @@ export const updatePlant = tool({
         // 3. 更新养护指南
         if (careGuide && Object.keys(careGuide).length > 0) {
             // 检查是否已有养护指南
-            const existingGuide = await db
+            const [existingGuide] = await db
                 .select()
                 .from(careGuides)
                 .where(eq(careGuides.plantId, plantId))
-                .get();
+                .limit(1);
 
             try {
                 if (existingGuide) {
-                    updatedCareGuide = await db
+                    const [res] = await db
                         .update(careGuides)
                         .set(careGuide)
                         .where(eq(careGuides.plantId, plantId))
-                        .returning()
-                        .get();
+                        .returning();
+                    updatedCareGuide = res;
                 } else {
-                    updatedCareGuide = await db
+                    const [res] = await db
                         .insert(careGuides)
                         .values({
                             plantId,
                             ...careGuide
                         })
-                        .returning()
-                        .get();
+                        .returning();
+                    updatedCareGuide = res;
                 }
             } catch (error) {
                 console.error("Update care guide error:", error);

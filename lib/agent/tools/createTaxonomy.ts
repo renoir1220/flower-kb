@@ -17,40 +17,38 @@ export const createTaxonomy = tool({
     }),
     execute: async ({ familyName, familyLatinName, genusName, genusLatinName }) => {
         // 检查或创建科
-        let targetFamily = await db
+        let [targetFamily] = await db
             .select()
             .from(families)
             .where(eq(families.name, familyName))
-            .get();
+            .limit(1);
 
         if (!targetFamily) {
-            targetFamily = await db
+            [targetFamily] = await db
                 .insert(families)
                 .values({
                     name: familyName,
                     latinName: familyLatinName || null,
                 })
-                .returning()
-                .get();
+                .returning();
         }
 
         // 检查或创建属
-        let targetGenus = await db
+        let [targetGenus] = await db
             .select()
             .from(genera)
             .where(eq(genera.name, genusName))
-            .get();
+            .limit(1);
 
         if (!targetGenus) {
-            targetGenus = await db
+            [targetGenus] = await db
                 .insert(genera)
                 .values({
                     name: genusName,
                     latinName: genusLatinName || null,
                     familyId: targetFamily.id,
                 })
-                .returning()
-                .get();
+                .returning();
         }
 
         return {

@@ -37,7 +37,7 @@ export async function PUT(
 
         // 2. Update care guide
         // Check if care guide exists first
-        const existingGuide = await db.select().from(careGuides).where(eq(careGuides.plantId, id)).get();
+        const [existingGuide] = await db.select().from(careGuides).where(eq(careGuides.plantId, id)).limit(1);
 
         if (existingGuide) {
             await db.update(careGuides)

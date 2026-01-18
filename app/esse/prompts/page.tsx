@@ -36,14 +36,14 @@ export default async function PromptsPage() {
     const taskName = toText(formData.get("taskName"));
     const prompt = toText(formData.get("prompt"));
     const requestParams = toText(formData.get("requestParams"));
-    const isDefault = formData.get("isDefault") ? 1 : 0;
+    const isDefault = formData.get("isDefault") ? true : false;
 
     if (!taskName || !prompt) {
       return;
     }
 
     if (isDefault) {
-      await db.update(llmPrompts).set({ isDefault: 0 });
+      await db.update(llmPrompts).set({ isDefault: false });
     }
 
     await db.insert(llmPrompts).values({
@@ -64,10 +64,10 @@ export default async function PromptsPage() {
     const taskName = toText(formData.get("taskName"));
     const prompt = toText(formData.get("prompt"));
     const requestParams = toText(formData.get("requestParams"));
-    const isDefault = formData.get("isDefault") ? 1 : 0;
+    const isDefault = formData.get("isDefault") ? true : false;
 
     if (isDefault) {
-      await db.update(llmPrompts).set({ isDefault: 0 });
+      await db.update(llmPrompts).set({ isDefault: false });
     }
 
     await db
@@ -77,7 +77,7 @@ export default async function PromptsPage() {
         prompt: prompt || "",
         requestParams,
         isDefault,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date(),
       })
       .where(eq(llmPrompts.id, id));
   }
@@ -149,7 +149,7 @@ export default async function PromptsPage() {
                   />
                   <div className="flex flex-wrap items-center gap-3">
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" name="isDefault" defaultChecked={prompt.isDefault === 1} />
+                      <input type="checkbox" name="isDefault" defaultChecked={prompt.isDefault === true} />
                       设为默认任务
                     </label>
                     <Button type="submit" size="sm">保存</Button>

@@ -37,27 +37,28 @@ export function buildImageTextMessage(imageUrl: string, text: string): LlmMessag
 
 async function getActiveLlmConfig(configId?: number) {
   if (configId) {
-    const byId = await db
+    const [byId] = await db
       .select()
       .from(llmConfigs)
       .where(eq(llmConfigs.id, configId))
-      .get();
+      .limit(1);
     if (byId) {
       return byId;
     }
   }
 
-  const defaultConfig = await db
+  const [defaultConfig] = await db
     .select()
     .from(llmConfigs)
-    .where(eq(llmConfigs.isDefault, 1))
-    .get();
+    .where(eq(llmConfigs.isDefault, true))
+    .limit(1);
 
   if (defaultConfig) {
     return defaultConfig;
   }
 
-  return db.select().from(llmConfigs).orderBy(desc(llmConfigs.id)).get();
+  const [latest] = await db.select().from(llmConfigs).orderBy(desc(llmConfigs.id)).limit(1);
+  return latest;
 }
 
 export async function createChatCompletion(options: LlmChatOptions) {

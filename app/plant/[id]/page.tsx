@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { PlantDetailView } from "@/components/plant-detail-view";
 
 async function getPlant(id: number) {
-    const plant = await db
+    const [plant] = await db
         .select({
             id: plants.id,
             name: plants.name,
@@ -22,15 +22,15 @@ async function getPlant(id: number) {
         .innerJoin(genera, eq(plants.genusId, genera.id))
         .innerJoin(families, eq(genera.familyId, families.id))
         .where(eq(plants.id, id))
-        .get();
+        .limit(1);
 
     if (!plant) return null;
 
-    const careGuide = await db
+    const [careGuide] = await db
         .select()
         .from(careGuides)
         .where(eq(careGuides.plantId, id))
-        .get();
+        .limit(1);
 
     const plantTagsData = await db
         .select({

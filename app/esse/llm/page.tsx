@@ -38,7 +38,7 @@ export default async function LlmConfigsPage() {
     const apiKey = toText(formData.get("apiKey"));
     const model = toText(formData.get("model"));
     const endpoint = toText(formData.get("endpoint"));
-    const isDefault = formData.get("isDefault") ? 1 : 0;
+    const isDefault = formData.get("isDefault") ? true : false;
     const temperature = toNumber(formData.get("temperature"));
     const topP = toNumber(formData.get("topP"));
     const maxTokens = toNumber(formData.get("maxTokens"));
@@ -48,7 +48,7 @@ export default async function LlmConfigsPage() {
     }
 
     if (isDefault) {
-      await db.update(llmConfigs).set({ isDefault: 0 });
+      await db.update(llmConfigs).set({ isDefault: false });
     }
 
     await db.insert(llmConfigs).values({
@@ -78,13 +78,13 @@ export default async function LlmConfigsPage() {
     const apiKey = toText(formData.get("apiKey"));
     const model = toText(formData.get("model"));
     const endpoint = toText(formData.get("endpoint"));
-    const isDefault = formData.get("isDefault") ? 1 : 0;
+    const isDefault = formData.get("isDefault") ? true : false;
     const temperature = toNumber(formData.get("temperature"));
     const topP = toNumber(formData.get("topP"));
     const maxTokens = toNumber(formData.get("maxTokens"));
 
     if (isDefault) {
-      await db.update(llmConfigs).set({ isDefault: 0 });
+      await db.update(llmConfigs).set({ isDefault: false });
     }
 
     await db
@@ -100,7 +100,7 @@ export default async function LlmConfigsPage() {
         topP,
         maxTokens,
         isDefault,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date(),
       })
       .where(eq(llmConfigs.id, id));
   }
@@ -176,7 +176,7 @@ export default async function LlmConfigsPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" name="isDefault" defaultChecked={config.isDefault === 1} />
+                      <input type="checkbox" name="isDefault" defaultChecked={config.isDefault === true} />
                       设为默认配置
                     </label>
                     <Button type="submit" size="sm">保存</Button>

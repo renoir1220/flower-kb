@@ -17,24 +17,25 @@ interface LLMConfig {
     apiKey: string;
     model: string;
     endpoint: string | null;
-    isDefault: number;
+    isDefault: boolean;
 }
 
 /**
  * 获取激活的 LLM 配置
  */
 async function getActiveLlmConfig(): Promise<LLMConfig | undefined> {
-    const defaultConfig = await db
+    const [defaultConfig] = await db
         .select()
         .from(llmConfigs)
-        .where(eq(llmConfigs.isDefault, 1))
-        .get();
+        .where(eq(llmConfigs.isDefault, true))
+        .limit(1);
 
     if (defaultConfig) {
         return defaultConfig;
     }
 
-    return db.select().from(llmConfigs).orderBy(desc(llmConfigs.id)).get();
+    const [latest] = await db.select().from(llmConfigs).orderBy(desc(llmConfigs.id)).limit(1);
+    return latest;
 }
 
 /**

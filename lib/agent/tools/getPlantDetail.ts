@@ -13,7 +13,7 @@ export const getPlantDetail = tool({
         plantId: z.number().describe("植物ID"),
     }),
     execute: async ({ plantId }) => {
-        const plant = await db
+        const [plant] = await db
             .select({
                 id: plants.id,
                 name: plants.name,
@@ -28,17 +28,17 @@ export const getPlantDetail = tool({
             .leftJoin(genera, eq(plants.genusId, genera.id))
             .leftJoin(families, eq(genera.familyId, families.id))
             .where(eq(plants.id, plantId))
-            .get();
+            .limit(1);
 
         if (!plant) {
             return { found: false, message: "植物不存在" };
         }
 
-        const careGuide = await db
+        const [careGuide] = await db
             .select()
             .from(careGuides)
             .where(eq(careGuides.plantId, plantId))
-            .get();
+            .limit(1);
 
         return {
             found: true,

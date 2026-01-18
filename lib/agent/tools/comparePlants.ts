@@ -20,7 +20,7 @@ export const comparePlants = tool({
             englishName: string | null;
             latinName: string | null;
             description: string | null;
-            difficulty: "easy" | "medium" | "hard" | null;
+            difficulty: string | null;
             familyName: string;
             genusName: string;
             care: Partial<CareGuide>;
@@ -29,7 +29,7 @@ export const comparePlants = tool({
 
         for (const name of plantNames) {
             const pattern = `%${name}%`;
-            const plant = await db
+            const [plant] = await db
                 .select({
                     id: plants.id,
                     name: plants.name,
@@ -50,16 +50,15 @@ export const comparePlants = tool({
                         like(plants.aliases, pattern)
                     )
                 )
-                .limit(1) // 每个名称只取最匹配的一个
-                .get();
+                .limit(1); // 每个名称只取最匹配的一个
 
             if (plant) {
                 // 获取养护指南
-                const careGuide = await db
+                const [careGuide] = await db
                     .select()
                     .from(careGuides)
                     .where(eq(careGuides.plantId, plant.id))
-                    .get();
+                    .limit(1);
 
                 foundPlants.push({
                     ...plant,

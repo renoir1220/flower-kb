@@ -9,11 +9,11 @@ export async function GET(request: Request) {
     const taskName = searchParams.get("task");
 
     if (taskName) {
-      const prompt = await db
+      const [prompt] = await db
         .select()
         .from(llmPrompts)
         .where(eq(llmPrompts.taskName, taskName))
-        .get();
+        .limit(1);
 
       if (!prompt) {
         return NextResponse.json({ error: "Prompt not found." }, { status: 404 });
@@ -22,21 +22,21 @@ export async function GET(request: Request) {
       return NextResponse.json(prompt);
     }
 
-    const defaultPrompt = await db
+    const [defaultPrompt] = await db
       .select()
       .from(llmPrompts)
-      .where(eq(llmPrompts.isDefault, 1))
-      .get();
+      .where(eq(llmPrompts.isDefault, true))
+      .limit(1);
 
     if (defaultPrompt) {
-    return NextResponse.json(defaultPrompt);
+      return NextResponse.json(defaultPrompt);
     }
 
-    const latestPrompt = await db
+    const [latestPrompt] = await db
       .select()
       .from(llmPrompts)
       .orderBy(desc(llmPrompts.id))
-      .get();
+      .limit(1);
 
     if (!latestPrompt) {
       return NextResponse.json({ error: "Prompt not found." }, { status: 404 });
