@@ -2,10 +2,15 @@ services:
   flower-kb:
     build: .
     ports:
-      - "3000:3000"
+      - "3088:3000"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
+    dns:
+      - 223.5.5.5
+      - 114.114.114.114

@@ -1,76 +1,72 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { pgTable, text, serial, integer, doublePrecision, varchar, timestamp, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 // 植物科表
-export const families = sqliteTable("families", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  latinName: text("latin_name"),
+export const families = pgTable("families", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  latinName: varchar("latin_name", { length: 255 }),
   description: text("description"),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // 植物属表
-export const genera = sqliteTable("genera", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const genera = pgTable("genera", {
+  id: serial("id").primaryKey(),
   familyId: integer("family_id")
     .notNull()
     .references(() => families.id),
-  name: text("name").notNull(),
-  latinName: text("latin_name"),
+  name: varchar("name", { length: 255 }).notNull(),
+  latinName: varchar("latin_name", { length: 255 }),
 });
 
 // 植物主表
-export const plants = sqliteTable("plants", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const plants = pgTable("plants", {
+  id: serial("id").primaryKey(),
   genusId: integer("genus_id")
     .notNull()
     .references(() => genera.id),
-  name: text("name").notNull(),
-  englishName: text("english_name"),
+  name: varchar("name", { length: 255 }).notNull(),
+  englishName: varchar("english_name", { length: 255 }),
   aliases: text("aliases"), // 别名，逗号分隔
-  latinName: text("latin_name"),
+  latinName: varchar("latin_name", { length: 255 }),
   imageUrl: text("image_url"),
-  difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }).default(
-    "medium"
-  ),
+  difficulty: varchar("difficulty", { length: 50 }).default("medium"), // simplified enum to varchar for now or use pgEnum
   description: text("description"),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
-  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // 养护指南表
-export const careGuides = sqliteTable("care_guides", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const careGuides = pgTable("care_guides", {
+  id: serial("id").primaryKey(),
   plantId: integer("plant_id")
     .notNull()
     .references(() => plants.id)
     .unique(),
-  soil: text("soil"), // 土壤
-  temperature: text("temperature"), // 温度
-  light: text("light"), // 光照
-  watering: text("watering"), // 浇水
-  humidity: text("humidity"), // 湿度
-  fertilizing: text("fertilizing"), // 施肥
-  pestControl: text("pest_control"), // 病虫害
-  postBloom: text("post_bloom"), // 花后管理
-  pruning: text("pruning"), // 修剪
-  propagation: text("propagation"), // 繁殖方式
-  notes: text("notes"), // 特别注意事项
+  soil: text("soil"),
+  temperature: text("temperature"),
+  light: text("light"),
+  watering: text("watering"),
+  humidity: text("humidity"),
+  fertilizing: text("fertilizing"),
+  pestControl: text("pest_control"),
+  postBloom: text("post_bloom"),
+  pruning: text("pruning"),
+  propagation: text("propagation"),
+  notes: text("notes"),
 });
 
 // 标签表
-export const tags = sqliteTable("tags", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull().unique(),
-  category: text("category", {
-    enum: ["type", "scene", "feature"],
-  }).default("type"), // type: 类型, scene: 场景, feature: 特性
-  color: text("color").default("#22c55e"),
+export const tags = pgTable("tags", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
+  category: varchar("category", { length: 50 }).default("type"),
+  color: varchar("color", { length: 50 }).default("#22c55e"),
 });
 
 // 植物-标签关联表
-export const plantTags = sqliteTable("plant_tags", {
+export const plantTags = pgTable("plant_tags", {
   plantId: integer("plant_id")
     .notNull()
     .references(() => plants.id),
@@ -80,31 +76,31 @@ export const plantTags = sqliteTable("plant_tags", {
 });
 
 // LLM 配置表
-export const llmConfigs = sqliteTable("llm_configs", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  provider: text("provider").notNull(),
-  baseUrl: text("base_url").notNull(),
-  apiKey: text("api_key").notNull(),
-  model: text("model").notNull(),
-  endpoint: text("endpoint").notNull().default("/api/v3/chat/completions"),
-  temperature: real("temperature"),
-  topP: real("top_p"),
+export const llmConfigs = pgTable("llm_configs", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  provider: varchar("provider", { length: 255 }).notNull(),
+  baseUrl: varchar("base_url", { length: 500 }).notNull(),
+  apiKey: varchar("api_key", { length: 500 }).notNull(),
+  model: varchar("model", { length: 255 }).notNull(),
+  endpoint: varchar("endpoint", { length: 255 }).notNull().default("/api/v3/chat/completions"),
+  temperature: doublePrecision("temperature"),
+  topP: doublePrecision("top_p"),
   maxTokens: integer("max_tokens"),
-  isDefault: integer("is_default").notNull().default(0),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
-  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP"),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // LLM Prompt 表
-export const llmPrompts = sqliteTable("llm_prompts", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  taskName: text("task_name").notNull(),
+export const llmPrompts = pgTable("llm_prompts", {
+  id: serial("id").primaryKey(),
+  taskName: varchar("task_name", { length: 255 }).notNull(),
   prompt: text("prompt").notNull(),
   requestParams: text("request_params"),
-  isDefault: integer("is_default").notNull().default(0),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
-  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP"),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // 关系定义
@@ -154,35 +150,35 @@ export const plantTagsRelations = relations(plantTags, ({ one }) => ({
 
 
 // 用户表
-export const users = sqliteTable("users", {
-  id: text("id").primaryKey(), // UUID
-  username: text("username").notNull().unique(),
-  displayName: text("display_name"),
-  role: text("role", { enum: ["admin", "user"] }).default("user"),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+export const users = pgTable("users", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  username: varchar("username", { length: 255 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 255 }),
+  role: varchar("role", { length: 50 }).default("user"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // 会话表
-export const conversations = sqliteTable("conversations", {
-  id: text("id").primaryKey(), // UUID
-  userId: text("user_id")
+export const conversations = pgTable("conversations", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  userId: varchar("user_id", { length: 255 })
     .notNull()
     .references(() => users.id),
-  title: text("title").notNull(),
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
-  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP"),
+  title: varchar("title", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // 消息表
-export const messages = sqliteTable("messages", {
-  id: text("id").primaryKey(), // UUID
-  conversationId: text("conversation_id")
+export const messages = pgTable("messages", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  conversationId: varchar("conversation_id", { length: 255 })
     .notNull()
     .references(() => conversations.id),
-  role: text("role", { enum: ["system", "user", "assistant", "data"] }).notNull(),
+  role: varchar("role", { length: 50 }).notNull(),
   content: text("content"),
-  toolInvocations: text("tool_invocations", { mode: "json" }), // JSON string
-  createdAt: text("created_at").default("CURRENT_TIMESTAMP"),
+  toolInvocations: text("tool_invocations"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 

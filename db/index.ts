@@ -1,20 +1,12 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import * as schema from "./schema";
-import path from "path";
 
-const dbPath = path.join(process.cwd(), "data", "flower-kb.db");
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: false
+});
 
-// 确保数据目录存在
-import fs from "fs";
-const dataDir = path.dirname(dbPath);
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(pool, { schema });
 
 export { schema };
