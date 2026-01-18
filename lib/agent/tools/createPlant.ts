@@ -4,7 +4,7 @@
 import { tool, generateText } from "ai";
 import { z } from "zod";
 import { db } from "@/db";
-import { plants, genera, families, careGuides } from "@/db/schema";
+import { plants, genera, families, careGuides, tags, plantTags } from "@/db/schema";
 import { eq } from "drizzle-orm";
 // 从 generateText 推断 model 类型
 type GenerateTextParams = Parameters<typeof generateText>[0];
@@ -72,7 +72,10 @@ const FULL_ENTRY_PROMPT = (name: string) => `# Role
     "postBloom": "花后管理",
     "propagation": "繁殖方法",
     "notes": "特别注意事项"
-  }
+  },
+  "tags": [
+    { "name": "标签名", "category": "type/scene/feature" }
+  ]
 }
 
 # User Input
@@ -216,6 +219,39 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                     });
                 } catch (error) {
                     console.error("Failed to save care guide:", error);
+                }
+            }
+
+            // 保存标签
+            if (plantData.tags && Array.isArray(plantData.tags)) {
+                for (const tagData of plantData.tags) {
+                    try {
+                        // 查找或创建标签
+                        let tag = await db
+                            .select()
+                            .from(tags)
+                            .where(eq(tags.name, tagData.name))
+                            .get();
+
+                        if (!tag) {
+                            tag = await db
+                                .insert(tags)
+                                .values({
+                                    name: tagData.name,
+                                    category: tagData.category || "type",
+                                })
+                                .returning()
+                                .get();
+                        }
+
+                        // 创建关联
+                        await db.insert(plantTags).values({
+                            plantId: newPlant.id,
+                            tagId: tag.id,
+                        });
+                    } catch (error) {
+                        console.error("Failed to save tag:", tagData.name, error);
+                    }
                 }
             }
 
