@@ -222,3 +222,55 @@ export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
 export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
+
+// Agent 执行日志 - 会话表
+export const agentSessions = pgTable("agent_sessions", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  conversationId: varchar("conversation_id", { length: 255 }),
+  startedAt: timestamp("started_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  totalDurationMs: integer("total_duration_ms"),
+  totalSteps: integer("total_steps").default(0),
+  totalPromptTokens: integer("total_prompt_tokens").default(0),
+  totalCompletionTokens: integer("total_completion_tokens").default(0),
+  status: varchar("status", { length: 50 }).default("running"), // running, completed, error
+  errorMessage: text("error_message"),
+});
+
+// Agent 执行日志 - 步骤表
+export const agentSteps = pgTable("agent_steps", {
+  id: serial("id").primaryKey(),
+  sessionId: varchar("session_id", { length: 255 })
+    .notNull()
+    .references(() => agentSessions.id),
+  stepNumber: integer("step_number").notNull(),
+  stepType: varchar("step_type", { length: 50 }).notNull(), // llm_response, tool_call, tool_result
+  toolName: varchar("tool_name", { length: 255 }),
+  startedAt: timestamp("started_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  durationMs: integer("duration_ms"),
+  input: text("input"), // JSON: 输入消息或工具参数
+  output: text("output"), // JSON: LLM 响应或工具结果
+  reasoning: text("reasoning"), // 推理过程
+  promptTokens: integer("prompt_tokens"),
+  completionTokens: integer("completion_tokens"),
+  error: text("error"),
+});
+
+// Agent 日志关系
+export const agentSessionsRelations = relations(agentSessions, ({ many }) => ({
+  steps: many(agentSteps),
+}));
+
+export const agentStepsRelations = relations(agentSteps, ({ one }) => ({
+  session: one(agentSessions, {
+    fields: [agentSteps.sessionId],
+    references: [agentSessions.id],
+  }),
+}));
+
+// Agent 日志类型导出
+export type AgentSession = typeof agentSessions.$inferSelect;
+export type NewAgentSession = typeof agentSessions.$inferInsert;
+export type AgentStep = typeof agentSteps.$inferSelect;
+export type NewAgentStep = typeof agentSteps.$inferInsert;

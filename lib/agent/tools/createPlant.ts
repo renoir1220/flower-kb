@@ -1,11 +1,14 @@
 /**
  * 创建植物工具
+ * 
+ * 一次性完成：查重 → 自动创建分类 → 创建植物
  */
 import { tool, generateText } from "ai";
 import { z } from "zod";
 import { db } from "@/db";
 import { plants, genera, families, careGuides, tags, plantTags } from "@/db/schema";
 import { eq } from "drizzle-orm";
+
 // 从 generateText 推断 model 类型
 type GenerateTextParams = Parameters<typeof generateText>[0];
 type ModelType = GenerateTextParams["model"];
@@ -85,14 +88,72 @@ type CreatePlantToolOptions = {
     model: ModelType;
 };
 
+/**
+ * 确保分类存在，不存在则自动创建
+ */
+async function ensureTaxonomyExists(plantData: {
+    familyName: string;
+    familyLatinName?: string;
+    genusName: string;
+    genusLatinName?: string;
+}) {
+    const { familyName, familyLatinName, genusName, genusLatinName } = plantData;
+
+    // 检查或创建科
+    let [targetFamily] = await db
+        .select()
+        .from(families)
+        .where(eq(families.name, familyName))
+        .limit(1);
+
+    let familyCreated = false;
+    if (!targetFamily) {
+        [targetFamily] = await db
+            .insert(families)
+            .values({
+                name: familyName,
+                latinName: familyLatinName || null,
+            })
+            .returning();
+        familyCreated = true;
+    }
+
+    // 检查或创建属
+    let [targetGenus] = await db
+        .select()
+        .from(genera)
+        .where(eq(genera.name, genusName))
+        .limit(1);
+
+    let genusCreated = false;
+    if (!targetGenus) {
+        [targetGenus] = await db
+            .insert(genera)
+            .values({
+                name: genusName,
+                latinName: genusLatinName || null,
+                familyId: targetFamily.id,
+            })
+            .returning();
+        genusCreated = true;
+    }
+
+    return {
+        family: targetFamily,
+        genus: targetGenus,
+        familyCreated,
+        genusCreated,
+    };
+}
+
 export function createPlantTool({ model }: CreatePlantToolOptions) {
     return tool({
-        description: "创建新的植物词条，只需提供中文名，AI 会自动生成完整信息。如果植物所属的科/属不存在，会返回提示需要先创建分类。",
+        description: "创建新的植物词条。只需提供植物中文名，会自动生成完整信息，自动创建所需的科/属分类。如果植物已存在，返回已有词条的链接。",
         inputSchema: z.object({
             name: z.string().describe("植物中文名"),
         }),
         execute: async ({ name }) => {
-            // 检查是否已存在
+            // 1. 查重：检查是否已存在
             const [existing] = await db
                 .select()
                 .from(plants)
@@ -102,7 +163,8 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
             if (existing) {
                 return {
                     success: false,
-                    message: `植物"${name}"已存在`,
+                    alreadyExists: true,
+                    message: `植物「${name}」已存在`,
                     existingPlant: {
                         id: existing.id,
                         name: existing.name,
@@ -111,11 +173,11 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                 };
             }
 
+            // 2. 调用 LLM 生成完整词条信息
             let plantData = null;
             let careGuideData = null;
 
             try {
-                // 调用 LLM 生成完整词条
                 const result = await generateText({
                     model,
                     messages: [{ role: "user", content: FULL_ENTRY_PROMPT(name) }],
@@ -135,57 +197,15 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                 return { success: false, message: "生成词条信息失败，请稍后重试" };
             }
 
-            // 检查科是否存在
-            const familyName = plantData.familyName;
-            const genusName = plantData.genusName;
+            // 3. 自动创建分类（若不存在）
+            const taxonomy = await ensureTaxonomyExists({
+                familyName: plantData.familyName,
+                familyLatinName: plantData.familyLatinName,
+                genusName: plantData.genusName,
+                genusLatinName: plantData.genusLatinName,
+            });
 
-            const [targetFamily] = await db
-                .select()
-                .from(families)
-                .where(eq(families.name, familyName))
-                .limit(1);
-
-            // 如果科不存在，返回提示
-            if (!targetFamily) {
-                return {
-                    success: false,
-                    needsTaxonomy: true,
-                    message: `植物"${name}"属于"${familyName} - ${genusName}"，但该分类在知识库中不存在。是否需要先创建这个分类？`,
-                    suggestedTaxonomy: {
-                        familyName: plantData.familyName,
-                        familyLatinName: plantData.familyLatinName,
-                        genusName: plantData.genusName,
-                        genusLatinName: plantData.genusLatinName,
-                    },
-                    plantName: name,
-                };
-            }
-
-            // 检查属是否存在
-            const [targetGenus] = await db
-                .select()
-                .from(genera)
-                .where(eq(genera.name, genusName))
-                .limit(1);
-
-            // 如果属不存在，返回提示
-            if (!targetGenus) {
-                return {
-                    success: false,
-                    needsTaxonomy: true,
-                    message: `科"${familyName}"已存在，但属"${genusName}"不存在。是否需要先创建这个属？`,
-                    suggestedTaxonomy: {
-                        familyName: plantData.familyName,
-                        familyLatinName: plantData.familyLatinName,
-                        genusName: plantData.genusName,
-                        genusLatinName: plantData.genusLatinName,
-                        familyExists: true,
-                    },
-                    plantName: name,
-                };
-            }
-
-            // 创建植物
+            // 4. 创建植物
             const [newPlant] = await db
                 .insert(plants)
                 .values({
@@ -195,11 +215,11 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                     aliases: plantData.aliases || null,
                     description: plantData.description || null,
                     difficulty: plantData.difficulty || "medium",
-                    genusId: targetGenus.id,
+                    genusId: taxonomy.genus.id,
                 })
                 .returning();
 
-            // 保存养护指南
+            // 5. 保存养护指南
             if (careGuideData) {
                 try {
                     await db.insert(careGuides).values({
@@ -221,7 +241,7 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                 }
             }
 
-            // 保存标签
+            // 6. 保存标签
             if (plantData.tags && Array.isArray(plantData.tags)) {
                 for (const tagData of plantData.tags) {
                     try {
@@ -253,16 +273,26 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                 }
             }
 
+            // 构建创建结果消息
+            const taxonomyNote = [];
+            if (taxonomy.familyCreated) {
+                taxonomyNote.push(`科「${taxonomy.family.name}」`);
+            }
+            if (taxonomy.genusCreated) {
+                taxonomyNote.push(`属「${taxonomy.genus.name}」`);
+            }
+
             return {
                 success: true,
-                message: `成功创建植物词条"${name}"，已归类到"${familyName} - ${genusName}"`,
+                message: `成功创建植物词条「${name}」，已归类到「${taxonomy.family.name} - ${taxonomy.genus.name}」`,
+                taxonomyCreated: taxonomyNote.length > 0 ? taxonomyNote.join("、") : null,
                 plant: {
                     id: newPlant.id,
                     name: newPlant.name,
                     englishName: newPlant.englishName,
                     latinName: newPlant.latinName,
-                    family: familyName,
-                    genus: genusName,
+                    family: taxonomy.family.name,
+                    genus: taxonomy.genus.name,
                     link: `/plant/${newPlant.id}`,
                 },
                 generatedInfo: {

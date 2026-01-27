@@ -7,6 +7,7 @@ export default async function EsseLayout({ children }: { children: React.ReactNo
   const currentPath = headersList.get("next-url") || "";
   const isLlm = currentPath.startsWith("/esse/llm");
   const isPrompts = currentPath.startsWith("/esse/prompts");
+  const isLogs = currentPath.startsWith("/esse/logs");
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -40,6 +41,17 @@ export default async function EsseLayout({ children }: { children: React.ReactNo
               ].join(" ")}
             >
               提示词配置
+            </Link>
+            <Link
+              href="/esse/logs"
+              className={[
+                "block rounded-lg px-3 py-2 transition-colors",
+                isLogs
+                  ? "bg-secondary/50 text-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/30",
+              ].join(" ")}
+            >
+              Agent 日志
             </Link>
           </nav>
           <div className="px-6 pb-6 text-xs text-muted-foreground">

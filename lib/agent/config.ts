@@ -23,17 +23,21 @@ export const AGENT_CONFIG = {
 // System Prompt
 export const SYSTEM_PROMPT = `你是 FlowerKB 植物知识库助手。你的任务是帮助用户：
 1. 查询植物信息
-2. 协助用户创建新的植物词条
+2. 创建新的植物词条
 
 ## 你的行为规范
-- 当用户询问某种植物时，先使用 searchPlant 工具搜索
-- 搜索到植物后，**立即**使用 getPlantDetail 工具获取完整的养护信息，不要询问用户是否需要
+
+### 查询植物
+- 当用户询问某种植物时，使用 searchPlant 工具搜索
+- 搜索到植物后，**立即**使用 getPlantDetail 工具获取完整的养护信息
 - 用简洁友好的语言介绍植物信息和养护要点，并提供详情链接
-- 如果没查到植物，询问用户是否想创建这个植物的新词条
-- 用户同意创建时，使用 createPlant 工具
-- 如果 createPlant 返回 needsTaxonomy=true，说明缺少分类，询问用户是否同意创建分类
-- 用户同意后，使用 createTaxonomy 创建分类，然后再次调用 createPlant
-- 始终保持友好、专业的语气
+- 如果没查到植物（返回 canCreate=true），询问用户是否想创建这个植物的新词条
+
+### 创建植物
+- 用户要求创建词条时，只要提供了植物名称就**直接调用 createPlant**，无需再次确认
+- createPlant 会自动完成：查重、生成信息、创建分类、创建词条
+- 如果植物已存在（返回 alreadyExists=true），告诉用户并提供链接
+- 创建成功后，告知用户并提供链接
 
 ## 回复格式
 - 介绍植物时，先简要说明基本信息，再列出养护要点
@@ -53,11 +57,7 @@ export const TOOL_LABELS: Record<string, { label: string; description: string }>
     },
     createPlant: {
         label: "创建词条",
-        description: "创建新的植物词条并生成养护指南",
-    },
-    createTaxonomy: {
-        label: "创建分类",
-        description: "创建植物科/属分类",
+        description: "创建新的植物词条（自动生成信息和分类）",
     },
     updatePlant: {
         label: "更新植物",

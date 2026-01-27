@@ -13,7 +13,9 @@ export { createAgentTools, baseTools } from "./tools";
 export {
     searchPlant,
     getPlantDetail,
-    createTaxonomy,
     createPlantTool,
     listFamilies,
 } from "./tools";
+
+// 导出日志记录器
+export { AgentLogger, createAgentLogger } from "./logger";

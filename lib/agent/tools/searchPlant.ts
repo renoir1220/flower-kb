@@ -39,7 +39,12 @@ export const searchPlant = tool({
             .limit(5);
 
         if (results.length === 0) {
-            return { found: false, message: `未找到与"${query}"相关的植物` };
+            return {
+                found: false,
+                message: `未找到与「${query}」相关的植物`,
+                canCreate: true,
+                suggestedName: query,
+            };
         }
 
         return {

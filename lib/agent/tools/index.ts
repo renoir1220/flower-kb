@@ -4,7 +4,6 @@
 import { generateText } from "ai";
 import { searchPlant } from "./searchPlant";
 import { getPlantDetail } from "./getPlantDetail";
-import { createTaxonomy } from "./createTaxonomy";
 import { createPlantTool } from "./createPlant";
 import { listFamilies } from "./listFamilies";
 import { updatePlant } from "./updatePlant";
@@ -20,7 +19,6 @@ type ModelType = GenerateTextParams["model"];
 // 导出单个工具
 export { searchPlant } from "./searchPlant";
 export { getPlantDetail } from "./getPlantDetail";
-export { createTaxonomy } from "./createTaxonomy";
 export { createPlantTool } from "./createPlant";
 export { listFamilies } from "./listFamilies";
 export { updatePlant } from "./updatePlant";
@@ -37,7 +35,6 @@ export function createAgentTools(model: ModelType) {
     return {
         searchPlant,
         getPlantDetail,
-        createTaxonomy,
         createPlant: createPlantTool({ model }),
         listFamilies,
         updatePlant,
@@ -54,7 +51,6 @@ export function createAgentTools(model: ModelType) {
 export const baseTools = {
     searchPlant,
     getPlantDetail,
-    createTaxonomy,
     listFamilies,
     updatePlant,
     deletePlant,
