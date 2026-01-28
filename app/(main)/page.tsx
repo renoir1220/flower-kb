@@ -111,17 +111,6 @@ export default async function HomePage({
             <div className="mb-12">
               <SearchBar />
             </div>
-
-            <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto mt-12">
-              <span className="text-sm font-medium text-muted-foreground mr-2 py-1.5">热门分类:</span>
-              {allTags.filter(t => t.category === "type").map((tag) => (
-                <Link key={tag.id} href={`/?q=&filters=${tag.name}`}>
-                  <span className="px-3 py-1.5 rounded-full text-sm font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors cursor-pointer">
-                    {tag.name}
-                  </span>
-                </Link>
-              ))}
-            </div>
           </div>
         </section>
       )}

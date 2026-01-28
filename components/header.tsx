@@ -36,21 +36,7 @@ function HeaderContent() {
                     </div>
                 )}
 
-                {/* Navigation */}
-                <nav className={`flex items-center gap-6 flex-shrink-0 ${hasQuery ? '' : ''}`}>
-                    <Link
-                        href="/"
-                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-                    >
-                        首页
-                    </Link>
-                    <Link
-                        href="/explore"
-                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-                    >
-                        探索
-                    </Link>
-                </nav>
+
             </div>
         </header>
     );

@@ -102,7 +102,7 @@ export const updatePlant = tool({
 
         return {
             success: true,
-            message: `成功更新植物"${updatedPlant?.name || existingPlant.name}"的信息`,
+            message: `成功更新植物"${updatedPlant?.name || existingPlant.name}"的信息，请刷新页面查看最新内容`,
             updatedFields: {
                 basicInfo: basicInfo ? Object.keys(basicInfo) : [],
                 careGuide: careGuide ? Object.keys(careGuide) : [],
