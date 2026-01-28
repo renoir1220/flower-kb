@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { SearchBar } from "@/components/search-bar";
 import { SearchFilters } from "@/components/search-filters";
+import { EmptySearchResult } from "@/components/empty-search-result";
 import { searchPlants } from "@/lib/search";
 
 async function getPlants() {
@@ -161,9 +162,7 @@ export default async function HomePage({
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-20 text-muted-foreground">
-                    <p>未找到相关结果，请尝试其他关键词。</p>
-                  </div>
+                  <EmptySearchResult query={query} />
                 )}
               </div>
             </div>

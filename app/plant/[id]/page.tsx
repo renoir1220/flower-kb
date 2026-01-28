@@ -14,7 +14,9 @@ async function getPlant(id: number) {
             latinName: plants.latinName,
             difficulty: plants.difficulty,
             description: plants.description,
+            genusId: plants.genusId,
             genusName: genera.name,
+            familyId: genera.familyId,
             familyName: families.name,
             familyLatinName: families.latinName, // Keep this just in case, though not used in UI view now
         })
@@ -66,5 +68,9 @@ export default async function PlantDetailPage({
         notFound();
     }
 
-    return <PlantDetailView plant={plant} />;
+    // 获取所有科和属列表，用于编辑时的下拉选择
+    const allFamilies = await db.select().from(families);
+    const allGenera = await db.select().from(genera);
+
+    return <PlantDetailView plant={plant} families={allFamilies} genera={allGenera} />;
 }

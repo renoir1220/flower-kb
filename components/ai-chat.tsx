@@ -27,6 +27,8 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
 interface AIChatProps {
   type?: "page" | "widget";
   showBackLink?: boolean;
+  initialMessage?: string | null;
+  onMessageSent?: () => void;
 }
 
 function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) {
@@ -46,12 +48,22 @@ function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) 
   );
 }
 
-export function AIChat({ type = "page", showBackLink = true }: AIChatProps) {
+export function AIChat({ type = "page", showBackLink = true, initialMessage, onMessageSent }: AIChatProps) {
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/agent/chat" }),
   });
 
   const [input, setInput] = useState("");
+  const initialMessageSentRef = useRef(false);
+
+  // 处理初始消息（从外部触发的自动发送）
+  useEffect(() => {
+    if (initialMessage && !initialMessageSentRef.current && status === "ready") {
+      initialMessageSentRef.current = true;
+      sendMessage({ text: initialMessage });
+      onMessageSent?.();
+    }
+  }, [initialMessage, status, sendMessage, onMessageSent]);
   const isLoading = status === "streaming" || status === "submitted";
   const lastAssistantMessageId = [...messages].reverse().find((message) => message.role === "assistant")?.id;
 
@@ -250,6 +262,7 @@ export function AIChatWidget({ hideOnRoutes = ["/ai", "/esse"] }: { hideOnRoutes
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const previousPathnameRef = useRef(pathname);
 
   useEffect(() => {
@@ -271,6 +284,16 @@ export function AIChatWidget({ hideOnRoutes = ["/ai", "/esse"] }: { hideOnRoutes
     }
     previousPathnameRef.current = pathname;
   }, [isMobile, isOpen, pathname]);
+
+  // 监听自定义事件，打开聊天并发送消息
+  useEffect(() => {
+    const handleOpenChat = (e: CustomEvent<{ message: string }>) => {
+      setPendingMessage(e.detail.message);
+      setIsOpen(true);
+    };
+    window.addEventListener("openChatWithMessage", handleOpenChat as EventListener);
+    return () => window.removeEventListener("openChatWithMessage", handleOpenChat as EventListener);
+  }, []);
 
   if (hideOnRoutes.some((r) => pathname.startsWith(r))) return null;
 
@@ -301,7 +324,14 @@ export function AIChatWidget({ hideOnRoutes = ["/ai", "/esse"] }: { hideOnRoutes
               </div>
               <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}><X className="w-4 h-4" /></Button>
             </div>
-            <div className="flex-1 min-h-0"><AIChat type="widget" showBackLink={false} /></div>
+            <div className="flex-1 min-h-0">
+              <AIChat
+                type="widget"
+                showBackLink={false}
+                initialMessage={pendingMessage}
+                onMessageSent={() => setPendingMessage(null)}
+              />
+            </div>
           </div>
         </>
       )}

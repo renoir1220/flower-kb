@@ -21,6 +21,7 @@ export async function PUT(
             latinName,
             aliases,
             description,
+            genusId,
             careGuide
         } = body;
 
@@ -32,6 +33,7 @@ export async function PUT(
                 latinName,
                 aliases,
                 description,
+                ...(genusId && { genusId }),
             })
             .where(eq(plants.id, id));
 

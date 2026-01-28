@@ -153,14 +153,15 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
             name: z.string().describe("植物中文名"),
         }),
         execute: async ({ name }) => {
-            // 1. 查重：检查是否已存在
-            const [existing] = await db
+            // 1. 查重：检查名称或别名是否已存在
+            const existingByName = await db
                 .select()
                 .from(plants)
                 .where(eq(plants.name, name))
                 .limit(1);
 
-            if (existing) {
+            if (existingByName.length > 0) {
+                const existing = existingByName[0];
                 return {
                     success: false,
                     alreadyExists: true,
@@ -171,6 +172,26 @@ export function createPlantTool({ model }: CreatePlantToolOptions) {
                         link: `/plant/${existing.id}`,
                     },
                 };
+            }
+
+            // 检查别名中是否包含该名称
+            const allPlants = await db.select().from(plants);
+            for (const plant of allPlants) {
+                if (plant.aliases) {
+                    const aliasList = plant.aliases.split(/[,、，]/).map(a => a.trim());
+                    if (aliasList.includes(name)) {
+                        return {
+                            success: false,
+                            alreadyExists: true,
+                            message: `「${name}」是「${plant.name}」的别名，该植物已存在`,
+                            existingPlant: {
+                                id: plant.id,
+                                name: plant.name,
+                                link: `/plant/${plant.id}`,
+                            },
+                        };
+                    }
+                }
             }
 
             // 2. 调用 LLM 生成完整词条信息

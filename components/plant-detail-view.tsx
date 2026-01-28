@@ -19,6 +19,8 @@ interface PlantDetailViewProps {
         latinName: string | null;
         aliases: string | null;
         description: string | null;
+        genusId: number;
+        familyId: number;
         familyName: string;
         genusName: string;
         careGuide: {
@@ -39,6 +41,8 @@ interface PlantDetailViewProps {
             color: string | null;
         }[];
     };
+    families: { id: number; name: string; latinName: string | null }[];
+    genera: { id: number; name: string; latinName: string | null; familyId: number }[];
 }
 
 interface CareItemProps {
@@ -64,7 +68,7 @@ function CareItem({ title, content }: CareItemProps) {
     );
 }
 
-export function PlantDetailView({ plant }: PlantDetailViewProps) {
+export function PlantDetailView({ plant, families, genera }: PlantDetailViewProps) {
     const router = useRouter();
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -78,6 +82,7 @@ export function PlantDetailView({ plant }: PlantDetailViewProps) {
         latinName: plant.latinName || "",
         aliases: plant.aliases || "",
         description: plant.description || "",
+        genusId: plant.genusId,
         careGuide: {
             soil: plant.careGuide?.soil || "",
             temperature: plant.careGuide?.temperature || "",
@@ -310,42 +315,84 @@ export function PlantDetailView({ plant }: PlantDetailViewProps) {
                         </div>
 
                         <div className="space-y-4 max-w-2xl mx-auto w-full">
-                            {isEditing ? (
-                                <div className="space-y-4 p-6 bg-secondary/20 rounded-xl border border-border/50">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-medium text-muted-foreground uppercase">植物名称</label>
-                                        <Input
-                                            value={formData.name}
-                                            onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                            className="text-center text-2xl font-bold h-12"
-                                        />
+                            {isEditing ? (() => {
+                                // 根据当前选中的属获取对应的科
+                                const currentGenus = genera.find(g => g.id === formData.genusId);
+                                const currentFamilyId = currentGenus?.familyId || plant.familyId;
+                                // 过滤出当前科下的所有属
+                                const filteredGenera = genera.filter(g => g.familyId === currentFamilyId);
+
+                                return (
+                                    <div className="space-y-4 p-6 bg-secondary/20 rounded-xl border border-border/50">
+                                        {/* 科属选择 */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-medium text-muted-foreground uppercase">科</label>
+                                                <select
+                                                    value={currentFamilyId}
+                                                    onChange={e => {
+                                                        const newFamilyId = parseInt(e.target.value);
+                                                        // 切换科时，自动选择该科下的第一个属
+                                                        const firstGenus = genera.find(g => g.familyId === newFamilyId);
+                                                        if (firstGenus) {
+                                                            setFormData({ ...formData, genusId: firstGenus.id });
+                                                        }
+                                                    }}
+                                                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                                >
+                                                    {families.map(f => (
+                                                        <option key={f.id} value={f.id}>{f.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-medium text-muted-foreground uppercase">属</label>
+                                                <select
+                                                    value={formData.genusId}
+                                                    onChange={e => setFormData({ ...formData, genusId: parseInt(e.target.value) })}
+                                                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                                >
+                                                    {filteredGenera.map(g => (
+                                                        <option key={g.id} value={g.id}>{g.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-muted-foreground uppercase">植物名称</label>
+                                            <Input
+                                                value={formData.name}
+                                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                                className="text-center text-2xl font-bold h-12"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-muted-foreground uppercase">英文名 (English Name)</label>
+                                            <Input
+                                                value={formData.englishName}
+                                                onChange={e => setFormData({ ...formData, englishName: e.target.value })}
+                                                className="text-center text-lg font-medium"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-muted-foreground uppercase">学名 (Latin Name)</label>
+                                            <Input
+                                                value={formData.latinName}
+                                                onChange={e => setFormData({ ...formData, latinName: e.target.value })}
+                                                className="text-center italic font-serif"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-muted-foreground uppercase">别名 (逗号分隔)</label>
+                                            <Input
+                                                value={formData.aliases}
+                                                onChange={e => setFormData({ ...formData, aliases: e.target.value })}
+                                                className="text-center"
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-medium text-muted-foreground uppercase">英文名 (English Name)</label>
-                                        <Input
-                                            value={formData.englishName}
-                                            onChange={e => setFormData({ ...formData, englishName: e.target.value })}
-                                            className="text-center text-lg font-medium"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-medium text-muted-foreground uppercase">学名 (Latin Name)</label>
-                                        <Input
-                                            value={formData.latinName}
-                                            onChange={e => setFormData({ ...formData, latinName: e.target.value })}
-                                            className="text-center italic font-serif"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-medium text-muted-foreground uppercase">别名 (逗号分隔)</label>
-                                        <Input
-                                            value={formData.aliases}
-                                            onChange={e => setFormData({ ...formData, aliases: e.target.value })}
-                                            className="text-center"
-                                        />
-                                    </div>
-                                </div>
-                            ) : (
+                                );
+                            })() : (
                                 <>
                                     <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-foreground text-balanced">
                                         {plant.name}

@@ -40,7 +40,7 @@ SSH_CMD="ssh -i $SSH_KEY -p $SERVER_PORT -o StrictHostKeyChecking=no $SERVER_USE
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo -e "${YELLOW}[1/4] 同步代码到服务器...${NC}"
-rsync -avz --progress \
+rsync -avz --progress --delete \
     --exclude 'node_modules' \
     --exclude '.next' \
     --exclude '.git' \

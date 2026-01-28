@@ -3,8 +3,8 @@
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useDebouncedCallback } from "use-debounce";
 import { cn } from "@/lib/utils";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface SearchBarProps {
     variant?: "default" | "compact";
@@ -14,11 +14,19 @@ export function SearchBar({ variant = "default" }: SearchBarProps) {
     const searchParams = useSearchParams();
     const pathname = usePathname();
     const { replace, push } = useRouter();
+    const currentQuery = searchParams.get("q")?.toString() ?? "";
+    const [inputValue, setInputValue] = useState(currentQuery);
+    const isComposingRef = useRef(false);
 
-    const handleSearch = useDebouncedCallback((term: string) => {
+    useEffect(() => {
+        setInputValue(currentQuery);
+    }, [currentQuery]);
+
+    const handleSearch = (term: string) => {
         const params = new URLSearchParams(searchParams);
-        if (term) {
-            params.set("q", term);
+        const normalizedTerm = term.trim();
+        if (normalizedTerm) {
+            params.set("q", normalizedTerm);
         } else {
             params.delete("q");
         }
@@ -32,7 +40,28 @@ export function SearchBar({ variant = "default" }: SearchBarProps) {
         } else {
             push(`/?${params.toString()}`);
         }
-    }, 300);
+    };
+
+    const shouldSubmit = useMemo(() => inputValue.trim() !== currentQuery.trim(), [inputValue, currentQuery]);
+
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!shouldSubmit) return;
+        handleSearch(inputValue);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        // 中文输入法组合输入过程中不应触发提交
+        if (e.nativeEvent.isComposing || isComposingRef.current || (e.nativeEvent as KeyboardEvent).keyCode === 229) {
+            return;
+        }
+        if (e.key === "Enter") {
+            e.preventDefault();
+            if (shouldSubmit) {
+                handleSearch(inputValue);
+            }
+        }
+    };
 
     const isCompact = variant === "compact";
 
@@ -41,7 +70,7 @@ export function SearchBar({ variant = "default" }: SearchBarProps) {
             "relative w-full mx-auto",
             isCompact ? "max-w-md" : "max-w-2xl"
         )}>
-            <div className="relative">
+            <form className="relative" onSubmit={handleSubmit} role="search" aria-label="站内搜索">
                 <Search className={cn(
                     "absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/50",
                     isCompact ? "h-4 w-4" : "h-5 w-5"
@@ -54,10 +83,18 @@ export function SearchBar({ variant = "default" }: SearchBarProps) {
                             : "h-14 pl-12 pr-4 text-lg border-2 border-primary/10 hover:border-primary/20 focus-visible:border-primary shadow-sm"
                     )}
                     placeholder={isCompact ? "搜索..." : "搜索植物名称、习性、或养护方法 （如：'室内 喜阴'）..."}
-                    onChange={(e) => handleSearch(e.target.value)}
-                    defaultValue={searchParams.get("q")?.toString()}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onCompositionStart={() => {
+                        isComposingRef.current = true;
+                    }}
+                    onCompositionEnd={() => {
+                        isComposingRef.current = false;
+                    }}
+                    enterKeyHint="search"
                 />
-            </div>
+            </form>
         </div>
     );
 }
