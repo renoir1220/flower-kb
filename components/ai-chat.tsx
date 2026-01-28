@@ -65,7 +65,13 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
     }
   }, [initialMessage, status, sendMessage, onMessageSent]);
   const isLoading = status === "streaming" || status === "submitted";
-  const lastAssistantMessageId = [...messages].reverse().find((message) => message.role === "assistant")?.id;
+  const lastAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
+  const lastAssistantMessageId = lastAssistantMessage?.id;
+
+  // 检查最后一条 assistant 消息是否有实际文本内容
+  const lastAssistantHasContent = lastAssistantMessage?.parts?.some(
+    (part) => part.type === "text" && part.text?.trim()
+  ) ?? false;
 
   const getPendingToolStatus = () => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -75,12 +81,15 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
         const part = message.parts?.[j];
         if (!part || !part.type?.startsWith?.("tool-")) continue;
         const toolPart = part as { toolName?: string; state?: string };
-        if (toolPart.state !== "call" && toolPart.state !== "streaming") continue;
-        const toolName = toolPart.toolName || "";
-        return {
-          label: TOOL_LABELS[toolName]?.label || "处理中...",
-          icon: TOOL_ICONS[toolName] || <Loader2 className="w-3 h-3 animate-spin" />,
-        };
+        // 只要工具还没返回结果，就显示状态
+        if (toolPart.state === "call" || toolPart.state === "streaming" || toolPart.state === "partial-call") {
+          const toolName = toolPart.toolName || "";
+          const toolLabel = TOOL_LABELS[toolName]?.label || "处理中...";
+          return {
+            label: `正在${toolLabel}...`,
+            icon: TOOL_ICONS[toolName] || <Loader2 className="w-3 h-3 animate-spin" />,
+          };
+        }
       }
     }
     return null;
@@ -88,17 +97,24 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
 
   const getThinkingStatus = () => {
     if (!isLoading) return null;
+    // 优先显示工具调用状态
+    const pendingTool = getPendingToolStatus();
+    if (pendingTool) {
+      return pendingTool;
+    }
+    // 刚提交时
     if (status === "submitted") {
       return { label: "正在发送...", icon: <Loader2 className="w-3 h-3 animate-spin" /> };
     }
-    const pendingTool = getPendingToolStatus();
-    if (pendingTool) {
-      return { label: pendingTool.label, icon: pendingTool.icon };
-    }
+    // 正在生成文本
     return { label: "思考中...", icon: <Loader2 className="w-3 h-3 animate-spin" /> };
   };
 
   const thinkingStatus = getThinkingStatus();
+
+  // 判断是否需要显示底部的状态指示器
+  // 条件：正在加载 且 (没有assistant消息 或 最后的assistant消息没有实际文本内容)
+  const shouldShowBottomStatus = isLoading && thinkingStatus && (!lastAssistantMessage || !lastAssistantHasContent);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,7 +195,7 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
       <div className="flex flex-col h-full">
         <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
           {messages.length === 0 ? <EmptyState onSuggestion={setInput} /> : messages.map(renderMessage)}
-          {isLoading && messages[messages.length - 1]?.role !== "assistant" && thinkingStatus && (
+          {shouldShowBottomStatus && (
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                 <Bot className="w-4 h-4 text-primary" />
@@ -226,7 +242,7 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
           {messages.length === 0 ? <EmptyState onSuggestion={setInput} /> : messages.map(renderMessage)}
-          {isLoading && messages[messages.length - 1]?.role !== "assistant" && thinkingStatus && (
+          {shouldShowBottomStatus && (
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center"><Bot className="w-4 h-4 text-primary" /></div>
               <div className="bg-secondary/50 rounded-2xl px-4 py-3 text-xs text-muted-foreground flex items-center gap-2">
