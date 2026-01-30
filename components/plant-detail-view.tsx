@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Share2, Pencil, Save, X, Loader2, Sparkles } from "lucide-react";
+import { Leaf, Share2, Pencil, Save, X, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -245,14 +245,19 @@ export function PlantDetailView({ plant, families, genera }: PlantDetailViewProp
             {/* Navigation & Toolbar */}
             <nav className="border-b border-border/40 bg-background/80 backdrop-blur-md fixed top-0 left-0 right-0 z-50">
                 <div className="container mx-auto px-6 h-16 flex items-center justify-between gap-4">
-                    <div className="flex-shrink-0">
-                        <Link href="/">
-                            <Button variant="ghost" size="sm" className="-ml-3 text-muted-foreground hover:text-foreground">
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                <span className="hidden sm:inline">返回目录</span>
-                            </Button>
-                        </Link>
-                    </div>
+                    <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-lg shadow-primary/20">
+                            <Leaf className="h-5 w-5" />
+                        </div>
+                        <div className="hidden sm:block">
+                            <h1 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors">
+                                FlowerKB
+                            </h1>
+                            <p className="text-[10px] text-muted-foreground -mt-0.5">
+                                植物养护知识库
+                            </p>
+                        </div>
+                    </Link>
 
                     <div className="flex-1 max-w-sm mx-auto">
                         <SearchBar variant="compact" />

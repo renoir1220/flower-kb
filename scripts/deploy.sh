@@ -7,7 +7,7 @@
 set -e
 
 # ============ 配置区 ============
-SERVER_IP="123.207.211.213"
+SERVER_IP="43.163.87.184"
 SERVER_USER="root"
 SERVER_PORT="22"
 REMOTE_PATH="/www/wwwroot/flower-kb"
