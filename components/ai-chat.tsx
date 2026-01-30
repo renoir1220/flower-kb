@@ -1,9 +1,9 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { useEffect, useRef, useState } from "react";
-import { Loader2, Send, X, Bot, User, Sparkles, Search, Database, Wand2, Stethoscope, List } from "lucide-react";
+import { DefaultChatTransport, UIMessage } from "ai";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Loader2, Send, X, Bot, User, Sparkles, Search, Database, Wand2, Stethoscope, List, Maximize2, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
@@ -24,11 +24,24 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   listFamilies: <List className="w-3 h-3" />,
 };
 
+// 共享的聊天状态类型
+interface ChatState {
+  messages: UIMessage[];
+  sendMessage: (params: { text: string }) => void;
+  stop: () => void;
+  status: "ready" | "submitted" | "streaming" | "error";
+  isLoading: boolean;
+}
+
 interface AIChatProps {
-  type?: "page" | "widget";
+  type?: "page" | "widget" | "fullscreen";
   showBackLink?: boolean;
   initialMessage?: string | null;
   onMessageSent?: () => void;
+  onClose?: () => void;
+  onFullscreen?: () => void;
+  // 可选：外部传入的聊天状态（用于共享上下文）
+  chatState?: ChatState;
 }
 
 function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) {
@@ -48,13 +61,61 @@ function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) 
   );
 }
 
-export function AIChat({ type = "page", showBackLink = true, initialMessage, onMessageSent }: AIChatProps) {
-  const { messages, sendMessage, status } = useChat({
+// 思考状态指示器组件
+function ThinkingIndicator({ status }: { status: { label: string; icon: React.ReactNode } }) {
+  return (
+    <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+        <Bot className="w-4 h-4 text-primary" />
+      </div>
+      <div className="bg-secondary/50 rounded-2xl px-4 py-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <span>{status.label}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 内部 hook：使用自己的聊天状态
+function useInternalChat() {
+  const { messages, sendMessage, status, stop } = useChat({
     transport: new DefaultChatTransport({ api: "/api/agent/chat" }),
   });
+  const isLoading = status === "streaming" || status === "submitted";
+  return { messages, sendMessage, status, isLoading, stop };
+}
+
+export function AIChat({
+  type = "page",
+  showBackLink = true,
+  initialMessage,
+  onMessageSent,
+  onClose,
+  onFullscreen,
+  chatState: externalChatState
+}: AIChatProps) {
+  // 如果外部传入了 chatState，使用外部的；否则使用内部的
+  const internalChatState = useInternalChat();
+  const { messages, sendMessage, status, isLoading, stop } = externalChatState || internalChatState;
 
   const [input, setInput] = useState("");
   const initialMessageSentRef = useRef(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // 自动滚动到底部
+  const scrollToBottom = useCallback(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
+
+  // 当消息变化或状态变化时自动滚动
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, status, scrollToBottom]);
 
   // 处理初始消息（从外部触发的自动发送）
   useEffect(() => {
@@ -64,57 +125,53 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
       onMessageSent?.();
     }
   }, [initialMessage, status, sendMessage, onMessageSent]);
-  const isLoading = status === "streaming" || status === "submitted";
-  const lastAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
-  const lastAssistantMessageId = lastAssistantMessage?.id;
 
-  // 检查最后一条 assistant 消息是否有实际文本内容
-  const lastAssistantHasContent = lastAssistantMessage?.parts?.some(
-    (part) => part.type === "text" && part.text?.trim()
-  ) ?? false;
-
-  const getPendingToolStatus = () => {
+  // 获取当前正在执行的工具状态
+  const getActiveToolStatus = useCallback(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       const message = messages[i];
       if (message.role !== "assistant") continue;
       for (let j = (message.parts?.length || 0) - 1; j >= 0; j -= 1) {
         const part = message.parts?.[j];
-        if (!part || !part.type?.startsWith?.("tool-")) continue;
-        const toolPart = part as { toolName?: string; state?: string };
-        // 只要工具还没返回结果，就显示状态
-        if (toolPart.state === "call" || toolPart.state === "streaming" || toolPart.state === "partial-call") {
-          const toolName = toolPart.toolName || "";
-          const toolLabel = TOOL_LABELS[toolName]?.label || "处理中...";
-          return {
-            label: `正在${toolLabel}...`,
-            icon: TOOL_ICONS[toolName] || <Loader2 className="w-3 h-3 animate-spin" />,
-          };
+
+        // 兼容性检测：检查 part 类型
+        const isTool = part?.type === "tool-invocation" || part?.type?.startsWith?.("tool-");
+
+        if (isTool) {
+          const toolPart = part as { toolName?: string; state?: string; type: string };
+          // 只要不是 result 状态，就认为正在进行
+          if (toolPart.state !== "result") {
+            const toolName = toolPart.toolName || "";
+            let toolLabel = "处理中";
+            if (toolName && TOOL_LABELS[toolName]) {
+              toolLabel = TOOL_LABELS[toolName].label;
+            } else if (toolName) {
+              toolLabel = toolName; // 如果有name但没映射，显示name
+            }
+
+            return {
+              label: `正在${toolLabel}...`,
+              icon: TOOL_ICONS[toolName] || <Loader2 className="w-3 h-3 animate-spin" />,
+            };
+          }
         }
       }
     }
     return null;
-  };
+  }, [messages]);
 
-  const getThinkingStatus = () => {
+  // 获取思考状态
+  const getThinkingStatus = useCallback(() => {
     if (!isLoading) return null;
-    // 优先显示工具调用状态
-    const pendingTool = getPendingToolStatus();
-    if (pendingTool) {
-      return pendingTool;
-    }
-    // 刚提交时
+    const toolStatus = getActiveToolStatus();
+    if (toolStatus) return toolStatus;
     if (status === "submitted") {
       return { label: "正在发送...", icon: <Loader2 className="w-3 h-3 animate-spin" /> };
     }
-    // 正在生成文本
     return { label: "思考中...", icon: <Loader2 className="w-3 h-3 animate-spin" /> };
-  };
+  }, [isLoading, status, getActiveToolStatus]);
 
   const thinkingStatus = getThinkingStatus();
-
-  // 判断是否需要显示底部的状态指示器
-  // 条件：正在加载 且 (没有assistant消息 或 最后的assistant消息没有实际文本内容)
-  const shouldShowBottomStatus = isLoading && thinkingStatus && (!lastAssistantMessage || !lastAssistantHasContent);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,12 +182,13 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
   };
 
   // 渲染消息
-  const renderMessage = (message: typeof messages[0]) => {
+  const renderMessage = (message: UIMessage) => {
     const isUser = message.role === "user";
     const renderedParts: React.ReactNode[] = [];
+    let hasToolInProgress = false;
 
     message.parts?.forEach((part, i) => {
-      if (part.type === "text") {
+      if (part.type === "text" && part.text?.trim()) {
         renderedParts.push(
           <div key={i} className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown
@@ -144,25 +202,21 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
             </ReactMarkdown>
           </div>
         );
-        return;
       }
-      if (part.type?.startsWith?.("tool-")) {
+      // 兼容性检测
+      const isTool = part?.type === "tool-invocation" || part?.type?.startsWith?.("tool-");
+      if (isTool) {
         const toolPart = part as { toolName?: string; state?: string };
-        const toolName = toolPart.toolName || "";
-        const toolInfo = TOOL_LABELS[toolName];
-        const toolIcon = TOOL_ICONS[toolName];
-        if (toolPart.state === "call" || toolPart.state === "streaming") {
-          renderedParts.push(
-            <div key={i} className="text-xs text-muted-foreground flex items-center gap-2 my-1">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              {toolIcon} {toolInfo?.label || "处理中..."}
-            </div>
-          );
+        // state 不是 result 表示工具正在执行
+        if (toolPart.state !== "result") {
+          hasToolInProgress = true;
         }
       }
     });
 
-    const shouldShowThinkingFallback = !isUser && isLoading && message.id === lastAssistantMessageId && renderedParts.length === 0;
+    if (renderedParts.length === 0 && !isUser) {
+      return null;
+    }
 
     return (
       <div key={message.id} className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
@@ -172,11 +226,13 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
           </div>
         )}
         <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${isUser ? "bg-primary text-primary-foreground" : "bg-secondary/50"}`}>
-          {renderedParts.length > 0 && renderedParts}
-          {shouldShowThinkingFallback && thinkingStatus && (
-            <div className="text-xs text-muted-foreground flex items-center gap-2">
-              {thinkingStatus.icon}
-              <span>{thinkingStatus.label}</span>
+          {renderedParts}
+          {hasToolInProgress && thinkingStatus && (
+            <div className="mt-3 pt-3 border-t border-border/50">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>{thinkingStatus.label}</span>
+              </div>
             </div>
           )}
         </div>
@@ -189,23 +245,22 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
     );
   };
 
+  const shouldShowBottomIndicator = isLoading && thinkingStatus && (
+    messages.length === 0 ||
+    messages[messages.length - 1]?.role === "user" ||
+    !messages.some(m => m.role === "assistant" && m.parts?.some(p => p.type === "text" && p.text?.trim()))
+  );
+
+  const renderedMessages = messages.map(renderMessage).filter(Boolean);
+
   // Widget 变体
   if (type === "widget") {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
-          {messages.length === 0 ? <EmptyState onSuggestion={setInput} /> : messages.map(renderMessage)}
-          {shouldShowBottomStatus && (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <Bot className="w-4 h-4 text-primary" />
-              </div>
-              <div className="bg-secondary/50 rounded-2xl px-4 py-3 text-xs text-muted-foreground flex items-center gap-2">
-                {thinkingStatus.icon}
-                <span>{thinkingStatus.label}</span>
-              </div>
-            </div>
-          )}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
+          {messages.length === 0 ? <EmptyState onSuggestion={setInput} /> : renderedMessages}
+          {shouldShowBottomIndicator && thinkingStatus && <ThinkingIndicator status={thinkingStatus} />}
+          <div ref={messagesEndRef} />
         </div>
         <div className="border-t p-3">
           <form onSubmit={handleSubmit} className="flex gap-2">
@@ -215,11 +270,67 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
               onChange={(e) => setInput(e.target.value)}
               placeholder="输入问题..."
               className="flex-1 px-4 py-2 rounded-xl border bg-background text-sm"
-              disabled={isLoading}
             />
-            <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </Button>
+            {isLoading ? (
+              <Button type="button" size="icon" variant="destructive" onClick={() => stop()}>
+                <Square className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button type="submit" size="icon" disabled={!input.trim()}>
+                <Send className="w-4 h-4" />
+              </Button>
+            )}
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // 全屏变体
+  if (type === "fullscreen") {
+    return (
+      <div className="fixed inset-0 z-[100] bg-background flex flex-col">
+        <header className="border-b h-14 flex items-center px-4 md:px-6 justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground flex items-center justify-center shadow-lg">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold">FlowerKB 助手</h1>
+              <p className="text-xs text-muted-foreground">智能植物养护顾问</p>
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} className="hover:bg-destructive/10 hover:text-destructive">
+            <X className="w-5 h-5" />
+          </Button>
+        </header>
+
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-4 md:px-6 py-8 space-y-6">
+            {messages.length === 0 ? <EmptyState onSuggestion={setInput} /> : renderedMessages}
+            {shouldShowBottomIndicator && thinkingStatus && <ThinkingIndicator status={thinkingStatus} />}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-4 flex gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="输入你的问题..."
+              className="flex-1 px-4 py-3 rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
+            />
+            {isLoading ? (
+              <Button type="button" size="lg" variant="destructive" onClick={() => stop()} className="px-6">
+                <Square className="w-5 h-5" />
+              </Button>
+            ) : (
+              <Button type="submit" size="lg" disabled={!input.trim()} className="px-6">
+                <Send className="w-5 h-5" />
+              </Button>
+            )}
           </form>
         </div>
       </div>
@@ -239,18 +350,11 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
         {showBackLink && <Link href="/"><Button variant="ghost" size="sm">返回首页</Button></Link>}
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-          {messages.length === 0 ? <EmptyState onSuggestion={setInput} /> : messages.map(renderMessage)}
-          {shouldShowBottomStatus && (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center"><Bot className="w-4 h-4 text-primary" /></div>
-              <div className="bg-secondary/50 rounded-2xl px-4 py-3 text-xs text-muted-foreground flex items-center gap-2">
-                {thinkingStatus.icon}
-                <span>{thinkingStatus.label}</span>
-              </div>
-            </div>
-          )}
+          {messages.length === 0 ? <EmptyState onSuggestion={setInput} /> : renderedMessages}
+          {shouldShowBottomIndicator && thinkingStatus && <ThinkingIndicator status={thinkingStatus} />}
+          <div ref={messagesEndRef} />
         </div>
       </div>
 
@@ -262,24 +366,47 @@ export function AIChat({ type = "page", showBackLink = true, initialMessage, onM
             onChange={(e) => setInput(e.target.value)}
             placeholder="输入你的问题..."
             className="flex-1 px-4 py-3 rounded-xl border bg-background"
-            disabled={isLoading}
           />
-          <Button type="submit" size="lg" disabled={isLoading || !input.trim()}>
-            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </Button>
+          {isLoading ? (
+            <Button type="button" size="lg" variant="destructive" onClick={() => stop()}>
+              <Square className="w-5 h-5" />
+            </Button>
+          ) : (
+            <Button type="submit" size="lg" disabled={!input.trim()}>
+              <Send className="w-5 h-5" />
+            </Button>
+          )}
         </form>
       </div>
     </div>
   );
 }
 
-// Widget 入口
+// Widget 入口 - 共享聊天状态
 export function AIChatWidget({ hideOnRoutes = ["/ai", "/esse"] }: { hideOnRoutes?: string[] }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const previousPathnameRef = useRef(pathname);
+
+  // 在 Widget 层级管理聊天状态，这样切换模式时可以保持上下文
+  const { messages, sendMessage, status, stop } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/agent/chat" }),
+  });
+  const isLoading = status === "streaming" || status === "submitted";
+  const chatState: ChatState = { messages, sendMessage, status, isLoading, stop };
+
+  // 处理初始消息
+  const initialMessageSentRef = useRef(false);
+  useEffect(() => {
+    if (pendingMessage && !initialMessageSentRef.current && status === "ready") {
+      initialMessageSentRef.current = true;
+      sendMessage({ text: pendingMessage });
+      setPendingMessage(null);
+    }
+  }, [pendingMessage, status, sendMessage]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 768px)");
@@ -294,24 +421,49 @@ export function AIChatWidget({ hideOnRoutes = ["/ai", "/esse"] }: { hideOnRoutes
 
   useEffect(() => {
     const previousPathname = previousPathnameRef.current;
-    if (previousPathname !== pathname && isMobile && isOpen) {
-      // 通过微任务关闭，避免 lint 规则对 effect 内直接 setState 的限制
+    if (previousPathname !== pathname && isMobile && isOpen && !isFullscreen) {
       queueMicrotask(() => setIsOpen(false));
     }
     previousPathnameRef.current = pathname;
-  }, [isMobile, isOpen, pathname]);
+  }, [isMobile, isOpen, isFullscreen, pathname]);
 
-  // 监听自定义事件，打开聊天并发送消息
   useEffect(() => {
     const handleOpenChat = (e: CustomEvent<{ message: string }>) => {
       setPendingMessage(e.detail.message);
+      initialMessageSentRef.current = false; // 重置标志以允许新消息发送
       setIsOpen(true);
     };
     window.addEventListener("openChatWithMessage", handleOpenChat as EventListener);
     return () => window.removeEventListener("openChatWithMessage", handleOpenChat as EventListener);
   }, []);
 
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isFullscreen]);
+
   if (hideOnRoutes.some((r) => pathname.startsWith(r))) return null;
+
+  // 全屏模式
+  if (isFullscreen) {
+    return (
+      <AIChat
+        type="fullscreen"
+        showBackLink={false}
+        chatState={chatState}
+        onClose={() => {
+          setIsFullscreen(false);
+          setIsOpen(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 flex flex-col items-end gap-3">
@@ -328,24 +480,36 @@ export function AIChatWidget({ hideOnRoutes = ["/ai", "/esse"] }: { hideOnRoutes
             className={
               isMobile
                 ? "fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] rounded-t-2xl border-t bg-background shadow-2xl overflow-hidden flex flex-col pb-[env(safe-area-inset-bottom)]"
-                : "w-[360px] h-[520px] rounded-2xl border bg-background shadow-2xl overflow-hidden flex flex-col"
+                : "w-[380px] h-[560px] rounded-2xl border bg-background shadow-2xl overflow-hidden flex flex-col"
             }
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b">
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-background/95">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground flex items-center justify-center">
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <span className="text-sm font-semibold">FlowerKB 助手</span>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}><X className="w-4 h-4" /></Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsFullscreen(true)}
+                  className="hover:bg-primary/10"
+                  title="全屏模式"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
             <div className="flex-1 min-h-0">
               <AIChat
                 type="widget"
                 showBackLink={false}
-                initialMessage={pendingMessage}
-                onMessageSent={() => setPendingMessage(null)}
+                chatState={chatState}
               />
             </div>
           </div>
